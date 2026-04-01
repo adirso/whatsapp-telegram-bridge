@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp → Telegram Bridge</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --wa: #25d366;
+      --tg: #2aabee;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 span.logo {
+      display: inline-flex;
+      gap: 4px;
+      font-size: 1.25rem;
+    }
+
+    nav {
+      display: flex;
+      gap: 4px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 8px;
+    }
+
+    nav button {
+      padding: 6px 18px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    nav button.active {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    nav button:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* Main */
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 40px 24px;
+    }
+
+    .panel {
+      width: 100%;
+      max-width: 520px;
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel.visible { display: flex; }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* Status */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.connected { background: var(--wa); box-shadow: 0 0 8px var(--wa); }
+    .dot.disconnected { background: var(--red); }
+    .dot.connecting {
+      background: var(--yellow);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+
+    .status-label {
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    /* QR */
+    #qr-wrapper {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    #qr-wrapper.visible { display: flex; }
+
+    #qr-img {
+      width: 220px;
+      height: 220px;
+      border-radius: 8px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #qr-img img {
+      width: 220px;
+      height: 220px;
+      border-radius: 8px;
+    }
+
+    .qr-hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .qr-spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--yellow);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      width: 100%;
+    }
+
+    .btn-green  { background: var(--wa);  color: #000; }
+    .btn-green:hover  { filter: brightness(1.1); }
+    .btn-red    { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+    .btn-red:hover    { background: #991b1b; }
+    .btn-blue   { background: var(--tg); color: #000; }
+    .btn-blue:hover   { filter: brightness(1.1); }
+    .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover  { color: var(--text); border-color: #64748b; }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+    /* Settings form */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+
+    .field label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .field .desc {
+      font-size: 0.75rem;
+      color: #475569;
+      margin-top: 2px;
+    }
+
+    .field input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    .field input:focus { border-color: var(--tg); }
+
+    .field .input-wrap {
+      position: relative;
+    }
+
+    .field .input-wrap input { padding-right: 42px; }
+
+    .field .toggle-vis {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 0;
+    }
+
+    .field .toggle-vis:hover { color: var(--text); }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 22px;
+      border-radius: 100px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    #toast.success { border-color: var(--wa); color: var(--wa); }
+    #toast.error   { border-color: var(--red); color: #fca5a5; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <span class="logo">📱→💬</span>
+    WhatsApp → Telegram Bridge
+  </h1>
+  <nav>
+    <button id="tab-connection" class="active" onclick="switchTab('connection')">Connection</button>
+    <button id="tab-settings" onclick="switchTab('settings')">Settings</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ── Connection Panel ── -->
+  <div id="panel-connection" class="panel visible">
+    <div class="card">
+      <div class="card-title">WhatsApp Status</div>
+
+      <div class="status-row">
+        <div class="dot disconnected" id="status-dot"></div>
+        <span class="status-label" id="status-text">Disconnected</span>
+      </div>
+
+      <!-- QR Code -->
+      <div id="qr-wrapper">
+        <div id="qr-img">
+          <div class="qr-spinner" id="qr-spinner"></div>
+        </div>
+        <p class="qr-hint">
+          Open WhatsApp on your phone<br>
+          <strong>Linked Devices → Link a Device</strong> → scan
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <button class="btn btn-green" id="btn-connect" onclick="connect()" style="display:none">
+        Connect
+      </button>
+      <button class="btn btn-red" id="btn-disconnect" onclick="disconnect()" style="display:none">
+        Disconnect
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Settings Panel ── -->
+  <div id="panel-settings" class="panel">
+    <div class="card">
+      <div class="card-title">Telegram</div>
+
+      <div class="field">
+        <label for="TELEGRAM_BOT_TOKEN">Bot Token</label>
+        <div class="input-wrap">
+          <input type="password" id="TELEGRAM_BOT_TOKEN" placeholder="123456:ABC-xyz..." autocomplete="off" />
+          <button class="toggle-vis" onclick="toggleVis('TELEGRAM_BOT_TOKEN', this)">Show</button>
+        </div>
+        <span class="desc">From @BotFather — requires app restart to take effect</span>
+      </div>
+
+      <div class="field">
+        <label for="TELEGRAM_GROUP_ID">Supergroup ID</label>
+        <input type="text" id="TELEGRAM_GROUP_ID" placeholder="-1001234567890" />
+        <span class="desc">Negative number. The bot must be admin with Manage Topics permission.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">WhatsApp</div>
+
+      <div class="field">
+        <label for="WHATSAPP_ALLOWED_NUMBERS">Allowed Numbers</label>
+        <input type="text" id="WHATSAPP_ALLOWED_NUMBERS" placeholder="1234567890,9876543210" />
+        <span class="desc">Comma-separated, without +. Leave empty to forward from everyone.</span>
+      </div>
+
+      <div class="field">
+        <label for="WHATSAPP_SESSION_DIR">Session Directory</label>
+        <input type="text" id="WHATSAPP_SESSION_DIR" placeholder="./.wwebjs_auth" />
+        <span class="desc">Where the WhatsApp session is persisted on disk.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Server</div>
+
+      <div class="field">
+        <label for="PORT">Web UI Port</label>
+        <input type="text" id="PORT" placeholder="3000" />
+        <span class="desc">Requires restart to take effect.</span>
+      </div>
+    </div>
+
+    <button class="btn btn-blue" onclick="saveSettings()">Save Settings</button>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Tab switching
+  // ---------------------------------------------------------------------------
+  function switchTab(tab) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('visible'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + tab).classList.add('visible');
+    document.getElementById('tab-' + tab).classList.add('active');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toast
+  // ---------------------------------------------------------------------------
+  let toastTimer;
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Status UI
+  // ---------------------------------------------------------------------------
+  let currentStatus = 'disconnected';
+  let hasQR = false;
+
+  function applyStatus(status) {
+    currentStatus = status;
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    const btnConnect = document.getElementById('btn-connect');
+    const btnDisconnect = document.getElementById('btn-disconnect');
+    const qrWrapper = document.getElementById('qr-wrapper');
+
+    dot.className = 'dot ' + status;
+    text.textContent = status === 'ready' ? 'Connected' : status === 'connecting' ? 'Connecting…' : 'Disconnected';
+
+    btnConnect.style.display = status === 'disconnected' ? '' : 'none';
+    btnDisconnect.style.display = status === 'ready' ? '' : 'none';
+
+    if (status === 'connecting') {
+      qrWrapper.classList.add('visible');
+    } else if (status === 'ready') {
+      qrWrapper.classList.remove('visible');
+      hasQR = false;
+    } else {
+      // disconnected — keep QR hidden
+      qrWrapper.classList.remove('visible');
+      hasQR = false;
+      // Reset QR image to spinner
+      const img = qrWrapper.querySelector('img');
+      if (img) img.remove();
+      const spinner = document.getElementById('qr-spinner');
+      if (!spinner) {
+        const s = document.createElement('div');
+        s.className = 'qr-spinner';
+        s.id = 'qr-spinner';
+        document.getElementById('qr-img').appendChild(s);
+      }
+    }
+  }
+
+  function applyQR(dataUrl) {
+    hasQR = true;
+    const container = document.getElementById('qr-img');
+    // Replace spinner with image
+    container.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = 'WhatsApp QR Code';
+    container.appendChild(img);
+    document.getElementById('qr-wrapper').classList.add('visible');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------------
+  async function connect() {
+    await fetch('/api/connect', { method: 'POST' });
+  }
+
+  async function disconnect() {
+    const btn = document.getElementById('btn-disconnect');
+    btn.disabled = true;
+    await fetch('/api/disconnect', { method: 'POST' });
+    btn.disabled = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings
+  // ---------------------------------------------------------------------------
+  const FIELDS = [
+    'TELEGRAM_BOT_TOKEN',
+    'TELEGRAM_GROUP_ID',
+    'WHATSAPP_ALLOWED_NUMBERS',
+    'WHATSAPP_SESSION_DIR',
+    'PORT',
+  ];
+
+  async function loadSettings() {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    for (const key of FIELDS) {
+      const el = document.getElementById(key);
+      if (el && data[key] !== undefined) el.value = data[key];
+    }
+  }
+
+  async function saveSettings() {
+    const body = {};
+    for (const key of FIELDS) {
+      const el = document.getElementById(key);
+      if (el) body[key] = el.value;
+    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      toast('Settings saved — restart the server for some changes to take effect');
+    } else {
+      toast('Failed to save settings', 'error');
+    }
+  }
+
+  function toggleVis(id, btn) {
+    const input = document.getElementById(id);
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    btn.textContent = isHidden ? 'Hide' : 'Show';
+  }
+
+  // ---------------------------------------------------------------------------
+  // WebSocket
+  // ---------------------------------------------------------------------------
+  let ws;
+  let wsReconnectDelay = 1000;
+
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+    ws.onopen = () => {
+      wsReconnectDelay = 1000;
+    };
+
+    ws.onmessage = event => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'status') applyStatus(msg.data);
+      if (msg.type === 'qr')     applyQR(msg.data);
+    };
+
+    ws.onclose = () => {
+      // Auto-reconnect with backoff
+      setTimeout(() => {
+        wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, 15000);
+        connectWS();
+      }, wsReconnectDelay);
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
+  connectWS();
+  loadSettings();
+</script>
+</body>
+</html>
