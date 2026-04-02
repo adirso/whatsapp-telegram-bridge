@@ -47,7 +47,7 @@ async function normaliseMessage(msg: Message): Promise<NormalisedMessage> {
   const whatsappChatId = chat.id._serialized;
   const topicName = chat.isGroup
     ? chat.name
-    : phoneFromJid(chat.id._serialized);
+    : (contact.pushname || contact.name || phoneFromJid(chat.id._serialized));
 
   const senderName: string | null = chat.isGroup
     ? (contact.pushname || contact.name || phoneFromJid(msg.author ?? msg.from))
